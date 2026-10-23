@@ -1,1 +1,53 @@
+name: Build Android APK
 
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Find and extract project ZIP
+        run: |
+          ZIP_FILE=$(find . -maxdepth 2 -name 'TemeBuddy-Phone-Build.zip' -print -quit)
+          if [ -z "$ZIP_FILE" ]; then
+            echo "找不到 TemeBuddy-Phone-Build.zip"
+            exit 1
+          fi
+          mkdir -p extracted
+          unzip -q "$ZIP_FILE" -d extracted
+          echo "ZIP contents:"
+          find extracted -maxdepth 3 -type f | head -80
+
+      - name: Locate Android project
+        run: |
+          GRADLE_FILE=$(find extracted -name gradlew -type f -print -quit)
+          if [ -z "$GRADLE_FILE" ]; then
+            echo "ZIP 中没有 gradlew，无法直接构建。"
+            exit 1
+          fi
+          PROJECT_DIR=$(dirname "$GRADLE_FILE")
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+          chmod +x "$GRADLE_FILE"
+
+      - name: Build debug APK
+        run: |
+          cd "$PROJECT_DIR"
+          ./gradlew assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: TemeBuddy-debug-apk
+          path: extracted/**/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
